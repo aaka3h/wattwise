@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import plistlib
 import time
@@ -128,7 +129,9 @@ def test_linux_synthetic_sysfs_rapl_and_battery(tmp_path: Path) -> None:
     (ac0 / "type").write_text("Mains\n")
     (ac0 / "online").write_text("0\n")
 
-    rapl = sysfs / "class" / "powercap" / "intel-rapl:0"
+    # Windows NTFS forbids ':' in directory names; use '_' on Windows hosts
+    rapl_dirname = "intel-rapl_0" if os.name == "nt" else "intel-rapl:0"
+    rapl = sysfs / "class" / "powercap" / rapl_dirname
     rapl.mkdir(parents=True)
     (rapl / "name").write_text("package-0\n")
     (rapl / "energy_uj").write_text("10000000\n")

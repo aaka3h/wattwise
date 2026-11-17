@@ -265,7 +265,7 @@ class LinuxPowerCollector(BasePlatformCollector):
 
         if rapl_root.is_dir():
             for entry in sorted(rapl_root.iterdir()):
-                if not entry.name.startswith("intel-rapl:"):
+                if not entry.name.startswith(("intel-rapl:", "intel-rapl_")):
                     continue
                 dname = (_read_text(entry / "name") or "").lower()
                 if dname.startswith("package"):
