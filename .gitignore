@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Packaging & build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local runtime databases & exports
+*.db
+*.db-shm
+*.db-wal
+wattwise_telemetry_*.csv
+wattwise_report_*.json
+
+# OS & Editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*~

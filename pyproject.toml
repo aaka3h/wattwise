@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wattwise"
+version = "1.0.0"
+description = "Cross-platform native desktop power consumption, electricity cost, and carbon footprint tracker for Linux, Windows, Apple Silicon (M-series), and Intel macOS."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Aakash" }
+]
+keywords = ["power", "energy", "battery", "carbon", "electricity", "linux", "windows", "macos", "apple-silicon"]
+dependencies = [
+    "psutil>=5.9.0",
+    "PySide6>=6.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/aaka3h/wattwise"
+Repository = "https://github.com/aaka3h/wattwise"
+Issues = "https://github.com/aaka3h/wattwise/issues"
+Contributing = "https://github.com/aaka3h/wattwise/blob/main/CONTRIBUTING.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+wattwise = "wattwise.__main__:main"
+wattwise-cli = "wattwise.__main__:cli_main"
+
+[project.gui-scripts]
+wattwise-gui = "wattwise.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
