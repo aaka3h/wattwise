@@ -35,6 +35,40 @@ from wattwise.ui.qt_compat import (
 from wattwise.ui.theme import CATEGORY_COLORS, DARK_PALETTE, ThemePalette
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _palette_bg_elevated(palette: ThemePalette) -> str:
+    """Safely access bg_elevated with a sensible fallback."""
+    return getattr(palette, "bg_elevated", palette.bg_card_alt)
+
+
+def _palette_accent_primary(palette: ThemePalette) -> str:
+    """Safely access accent_primary with a sensible fallback."""
+    return getattr(palette, "accent_primary", palette.accent_emerald)
+
+
+def _draw_frosted_tooltip(
+    painter: QPainter,
+    rect: QRectF,
+    palette: ThemePalette,
+    radius: float = 10.0,
+) -> None:
+    """Draw a frosted-glass tooltip background — shared by LivePowerChart & HistoryBarChart."""
+    bg = QColor(_palette_bg_elevated(palette))
+    bg.setAlpha(245 if palette.is_dark else 240)
+    border_c = QColor(palette.border_strong)
+    border_c.setAlpha(180)
+    painter.setPen(QPen(border_c, 0.5))
+    painter.setBrush(bg)
+    painter.drawRoundedRect(rect, radius, radius)
+
+
+# ---------------------------------------------------------------------------
+# KpiCard
+# ---------------------------------------------------------------------------
+
 class KpiCard(QFrame):
     """Compact metric card with top accent indicator, title, big value, and subtitle."""
 
@@ -47,20 +81,25 @@ class KpiCard(QFrame):
         super().__init__(parent)
         self.setObjectName("Card")
         self._accent_hex = accent_hex
-        self.setMinimumHeight(104)
+        self.setMinimumHeight(120)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 12)
-        layout.setSpacing(4)
+        layout.setContentsMargins(20, 18, 20, 16)
+        layout.setSpacing(6)
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
-        self.dot = QLabel("●")
-        self.dot.setStyleSheet(f"color: {accent_hex}; font-size: 11px;")
+        # The accent dot label is kept for API compat but hidden —
+        # a 3px left accent bar is painted instead via paintEvent.
+        self.dot = QLabel("")
+        self.dot.setFixedWidth(0)
+        self.dot.hide()
         self.title_lbl = QLabel(title)
         self.title_lbl.setObjectName("MutedLabel")
-        self.title_lbl.setStyleSheet("font-weight: 600; font-size: 12px;")
+        self.title_lbl.setStyleSheet(
+            "font-weight: 600; font-size: 12px; letter-spacing: 0.3px;"
+        )
         top_row.addWidget(self.dot)
         top_row.addWidget(self.title_lbl)
         top_row.addStretch()
@@ -68,19 +107,41 @@ class KpiCard(QFrame):
 
         self.value_lbl = QLabel("—")
         val_font = QFont()
-        val_font.setPointSize(18)
+        val_font.setPointSize(24)
         val_font.setBold(True)
         self.value_lbl.setFont(val_font)
         layout.addWidget(self.value_lbl)
 
         self.sub_lbl = QLabel("")
         self.sub_lbl.setObjectName("MutedLabel")
+        self.sub_lbl.setStyleSheet("font-size: 11px;")
         layout.addWidget(self.sub_lbl)
 
+    # --- public API (unchanged) -------------------------------------------
     def set_metrics(self, primary: str, secondary: str) -> None:
         self.value_lbl.setText(primary)
         self.sub_lbl.setText(secondary)
 
+    # --- premium left accent bar ------------------------------------------
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        bar_w = 3.0
+        bar_h = float(self.height()) - 24.0
+        bar_x = 0.0
+        bar_y = 12.0
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(bar_x, bar_y, bar_w, bar_h), 1.5, 1.5)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(self._accent_hex))
+        painter.drawPath(path)
+        painter.end()
+
+
+# ---------------------------------------------------------------------------
+# RadialPowerGauge
+# ---------------------------------------------------------------------------
 
 class RadialPowerGauge(QWidget):
     """Smooth 240-degree radial arc gauge displaying instantaneous system wattage & burn rate."""
@@ -139,76 +200,99 @@ class RadialPowerGauge(QWidget):
         # 240 deg sweep from 210 deg clockwise to -30 deg (Qt uses 1/16th degree counter-clockwise)
         start_angle_deg = 210.0
         span_total_deg = -240.0
-        pen_width = max(11.0, radius * 0.14)
+        pen_width = max(8.0, radius * 0.09)  # thinner, more elegant
 
         # Background track
         track_pen = QPen(QColor(self.palette.border_strong), pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         painter.setPen(track_pen)
         painter.drawArc(arc_rect, int(start_angle_deg * 16), int(span_total_deg * 16))
 
-        # Active arc
+        # Active arc with 4-stop gradient
         ratio = max(0.02, min(1.0, self.watts / max(1.0, self.scale_max)))
         grad = QLinearGradient(arc_rect.bottomLeft(), arc_rect.topRight())
-        grad.setColorAt(0.0, QColor(self.palette.accent_emerald))
-        grad.setColorAt(0.55, QColor(self.palette.accent_cyan))
+        accent_primary = _palette_accent_primary(self.palette)
+        grad.setColorAt(0.0, QColor(accent_primary))
+        grad.setColorAt(0.35, QColor(self.palette.accent_emerald))
+        grad.setColorAt(0.65, QColor(self.palette.accent_cyan))
         grad.setColorAt(1.0, QColor(self.palette.accent_amber if ratio < 0.82 else self.palette.accent_rose))
 
         val_pen = QPen(grad, pen_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         painter.setPen(val_pen)
         painter.drawArc(arc_rect, int(start_angle_deg * 16), int(span_total_deg * ratio * 16))
 
-        # Center wattage value
+        # Subtle glow on the active arc tip
+        end_angle_rad = math.radians(start_angle_deg + span_total_deg * ratio)
+        tip_x = cx + radius * math.cos(end_angle_rad)
+        tip_y = cy - radius * math.sin(end_angle_rad)
+        glow_c = QColor(self.palette.accent_cyan)
+        glow_c.setAlpha(50)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(glow_c)
+        glow_r = pen_width * 2.0
+        painter.drawEllipse(QPointF(tip_x, tip_y), glow_r, glow_r)
+
+        # Center wattage value — larger 28pt
         f_big = QFont()
-        f_big.setPointSize(22)
+        f_big.setPointSize(28)
         f_big.setBold(True)
         painter.setFont(f_big)
         painter.setPen(QColor(self.palette.text_primary))
         painter.drawText(
-            QRectF(cx - radius, cy - 34.0, radius * 2.0, 36.0),
+            QRectF(cx - radius, cy - 38.0, radius * 2.0, 42.0),
             Qt.AlignmentFlag.AlignCenter,
             f"{self.watts:.1f} W",
         )
 
-        # Burn rate & CO2/hr
+        # Burn rate & CO2/hr — refined layout
         f_sub = QFont()
         f_sub.setPointSize(9)
         painter.setFont(f_sub)
         painter.setPen(QColor(self.palette.text_muted))
         painter.drawText(
-            QRectF(cx - radius, cy + 4.0, radius * 2.0, 18.0),
+            QRectF(cx - radius, cy + 8.0, radius * 2.0, 18.0),
             Qt.AlignmentFlag.AlignCenter,
             self.burn_text,
         )
+        f_co2 = QFont()
+        f_co2.setPointSize(8)
+        painter.setFont(f_co2)
+        painter.setPen(QColor(self.palette.text_muted))
         painter.drawText(
-            QRectF(cx - radius, cy + 21.0, radius * 2.0, 18.0),
+            QRectF(cx - radius, cy + 26.0, radius * 2.0, 16.0),
             Qt.AlignmentFlag.AlignCenter,
             self.co2_rate_text,
         )
 
-        # Sensor mode pill at bottom of gauge
+        # Sensor mode pill at bottom of gauge — refined
         mode_map = {
             "direct": ("DIRECT SENSOR", self.palette.accent_emerald),
             "hybrid": ("HYBRID SENSOR", self.palette.accent_cyan),
             "estimated": ("CALIBRATED MODEL", self.palette.accent_amber),
         }
         badge_txt, badge_hex = mode_map.get(self.sensor_mode, ("TELEMETRY", self.palette.accent_cyan))
-        pill_rect = QRectF(cx - 64.0, cy + radius * 0.56, 128.0, 22.0)
+        pill_w = 138.0
+        pill_h = 24.0
+        pill_rect = QRectF(cx - pill_w / 2.0, cy + radius * 0.56, pill_w, pill_h)
         c_badge = QColor(badge_hex)
         bg_badge = QColor(c_badge)
-        bg_badge.setAlpha(36 if self.palette.is_dark else 26)
+        bg_badge.setAlpha(30 if self.palette.is_dark else 22)
 
-        painter.setPen(QPen(c_badge, 1.0))
+        painter.setPen(QPen(c_badge, 0.5))
         painter.setBrush(bg_badge)
-        painter.drawRoundedRect(pill_rect, 11.0, 11.0)
+        painter.drawRoundedRect(pill_rect, pill_h / 2.0, pill_h / 2.0)
 
         f_pill = QFont()
-        f_pill.setPointSize(8)
+        f_pill.setPointSize(7)
         f_pill.setBold(True)
         painter.setFont(f_pill)
         painter.setPen(c_badge)
         painter.drawText(pill_rect, Qt.AlignmentFlag.AlignCenter, badge_txt)
         painter.end()
 
+
+# ---------------------------------------------------------------------------
+# LivePowerChart
+# ---------------------------------------------------------------------------
 
 class LivePowerChart(QWidget):
     """Multi-series rolling real-time area chart (Total System, CPU, GPU) with hover crosshair."""
@@ -258,34 +342,43 @@ class LivePowerChart(QWidget):
         left, top, right, bottom = 46.0, 28.0, 14.0, 24.0
         plot = QRectF(left, top, max(40.0, w - left - right), max(40.0, h - top - bottom))
 
-        # Legend at top-right
+        # ----- Legend pills at top-right -----
         legend_items = [
-            ("Total System", self.palette.accent_emerald, 108.0),
-            ("CPU", self.palette.accent_cyan, 68.0),
-            ("GPU", self.palette.accent_violet, 64.0),
+            ("Total System", self.palette.accent_emerald, 122.0),
+            ("CPU", self.palette.accent_cyan, 62.0),
+            ("GPU", self.palette.accent_violet, 60.0),
         ]
-        lx = plot.right() - 242.0
+        lx = plot.right() - 246.0
         f_leg = QFont()
         f_leg.setPointSize(9)
         f_leg.setBold(True)
         painter.setFont(f_leg)
         for label, hex_c, step_w in legend_items:
+            pill_rect = QRectF(lx - 4.0, 2.0, step_w, 20.0)
+            pill_bg = QColor(hex_c)
+            pill_bg.setAlpha(20 if self.palette.is_dark else 14)
             painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(pill_bg)
+            painter.drawRoundedRect(pill_rect, 6.0, 6.0)
+            # dot
             painter.setBrush(QColor(hex_c))
-            painter.drawEllipse(QPointF(lx, 12.0), 4.5, 4.5)
+            painter.drawEllipse(QPointF(lx + 6.0, 12.0), 3.5, 3.5)
+            # text
             painter.setPen(QColor(self.palette.text_secondary))
-            painter.drawText(QRectF(lx + 9.0, 3.0, step_w - 12.0, 18.0), Qt.AlignmentFlag.AlignVCenter, label)
-            lx += step_w
+            painter.drawText(QRectF(lx + 14.0, 3.0, step_w - 22.0, 18.0), Qt.AlignmentFlag.AlignVCenter, label)
+            lx += step_w + 4.0
 
         pts = list(self._samples)
         max_val = max([p[1] for p in pts], default=30.0)
         y_max = max(20.0, math.ceil((max_val * 1.18) / 10.0) * 10.0)
 
-        # Horizontal grid lines + Y labels
+        # Horizontal grid lines + Y labels — thinner, lighter
         f_axis = QFont()
         f_axis.setPointSize(8)
         painter.setFont(f_axis)
-        grid_pen = QPen(QColor(self.palette.grid_line), 1.0, Qt.PenStyle.DashLine)
+        grid_c = QColor(self.palette.grid_line)
+        grid_c.setAlpha(140 if self.palette.is_dark else 180)
+        grid_pen = QPen(grid_c, 0.5, Qt.PenStyle.SolidLine)
         for i in range(5):
             frac = i / 4.0
             y = plot.bottom() - frac * plot.height()
@@ -317,11 +410,11 @@ class LivePowerChart(QWidget):
         def y_for(val: float) -> float:
             return plot.bottom() - min(1.0, max(0.0, val / y_max)) * plot.height()
 
-        # Draw each series (GPU back, CPU mid, Total front)
+        # Draw each series (GPU back, CPU mid, Total front) — cubic bezier
         series_cfg = [
-            (3, self.palette.accent_violet, 1.6, 26),
-            (2, self.palette.accent_cyan, 1.8, 32),
-            (1, self.palette.accent_emerald, 2.5, 52),
+            (3, self.palette.accent_violet, 1.4, 22),
+            (2, self.palette.accent_cyan, 1.6, 28),
+            (1, self.palette.accent_emerald, 2.2, 46),
         ]
         for tup_idx, col_hex, width_px, fill_alpha in series_cfg:
             line_path = QPainterPath()
@@ -335,19 +428,28 @@ class LivePowerChart(QWidget):
             for i in range(1, n):
                 px = x_for(i)
                 py = y_for(pts[i][tup_idx])
-                line_path.lineTo(px, py)
-                area_path.lineTo(px, py)
+                prev_x = x_for(i - 1)
+                prev_y = y_for(pts[i - 1][tup_idx])
+                # Cubic bezier — control points at ⅓ and ⅔ of the x span
+                cp1x = prev_x + (px - prev_x) / 3.0
+                cp2x = prev_x + 2.0 * (px - prev_x) / 3.0
+                line_path.cubicTo(cp1x, prev_y, cp2x, py, px, py)
+                area_path.cubicTo(cp1x, prev_y, cp2x, py, px, py)
 
             last_x = x_for(n - 1)
             area_path.lineTo(last_x, plot.bottom())
             area_path.closeSubpath()
 
+            # Area fill — 3 color stops with refined alpha transitions
             fill_grad = QLinearGradient(QPointF(0, plot.top()), QPointF(0, plot.bottom()))
             c_top = QColor(col_hex)
             c_top.setAlpha(fill_alpha)
+            c_mid = QColor(col_hex)
+            c_mid.setAlpha(int(fill_alpha * 0.4))
             c_bot = QColor(col_hex)
-            c_bot.setAlpha(2)
+            c_bot.setAlpha(0)
             fill_grad.setColorAt(0.0, c_top)
+            fill_grad.setColorAt(0.55, c_mid)
             fill_grad.setColorAt(1.0, c_bot)
 
             painter.setPen(Qt.PenStyle.NoPen)
@@ -365,7 +467,7 @@ class LivePowerChart(QWidget):
         painter.drawText(QRectF(plot.left(), plot.bottom() + 4.0, 90.0, 16.0), Qt.AlignmentFlag.AlignLeft, t_start)
         painter.drawText(QRectF(plot.right() - 90.0, plot.bottom() + 4.0, 90.0, 16.0), Qt.AlignmentFlag.AlignRight, t_end)
 
-        # Hover crosshair & tooltip HUD
+        # Hover crosshair & frosted tooltip HUD
         if self._hover_x is not None and plot.left() <= self._hover_x <= plot.right() and n >= 1:
             rel = (self._hover_x - plot.left()) / max(1.0, plot.width())
             idx = max(0, min(n - 1, int(round(rel * max(1, n - 1)))))
@@ -373,23 +475,23 @@ class LivePowerChart(QWidget):
             ts, tot_w, cpu_w, gpu_w = pts[idx]
             oth_w = max(0.0, tot_w - cpu_w - gpu_w)
 
-            painter.setPen(QPen(QColor(self.palette.text_muted), 1.0, Qt.PenStyle.DotLine))
+            # Crosshair line
+            cross_c = QColor(self.palette.text_muted)
+            cross_c.setAlpha(120)
+            painter.setPen(QPen(cross_c, 0.5, Qt.PenStyle.DashLine))
             painter.drawLine(QPointF(hx, plot.top()), QPointF(hx, plot.bottom()))
 
+            # Dot on total series
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(self.palette.accent_emerald))
             painter.drawEllipse(QPointF(hx, y_for(tot_w)), 4.0, 4.0)
 
-            tip_w, tip_h = 158.0, 74.0
+            # Frosted tooltip
+            tip_w, tip_h = 168.0, 78.0
             tx = hx + 12.0 if (hx + 12.0 + tip_w <= plot.right()) else (hx - tip_w - 12.0)
             ty = plot.top() + 8.0
             tip_rect = QRectF(tx, ty, tip_w, tip_h)
-
-            bg = QColor(self.palette.bg_sidebar)
-            bg.setAlpha(238)
-            painter.setPen(QPen(QColor(self.palette.border_strong), 1.0))
-            painter.setBrush(bg)
-            painter.drawRoundedRect(tip_rect, 8.0, 8.0)
+            _draw_frosted_tooltip(painter, tip_rect, self.palette, 10.0)
 
             t_str = dt.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
             lines = [
@@ -402,15 +504,19 @@ class LivePowerChart(QWidget):
             f_tip.setPointSize(8)
             f_tip.setBold(True)
             painter.setFont(f_tip)
-            painter.drawText(QRectF(tx + 9.0, ty + 6.0, tip_w - 18.0, 18.0), Qt.AlignmentFlag.AlignLeft, lines[0])
+            painter.drawText(QRectF(tx + 10.0, ty + 8.0, tip_w - 20.0, 18.0), Qt.AlignmentFlag.AlignLeft, lines[0])
             f_tip.setBold(False)
             painter.setFont(f_tip)
             painter.setPen(QColor(self.palette.text_secondary))
-            painter.drawText(QRectF(tx + 9.0, ty + 27.0, tip_w - 18.0, 18.0), Qt.AlignmentFlag.AlignLeft, lines[1])
-            painter.drawText(QRectF(tx + 9.0, ty + 46.0, tip_w - 18.0, 18.0), Qt.AlignmentFlag.AlignLeft, lines[2])
+            painter.drawText(QRectF(tx + 10.0, ty + 29.0, tip_w - 20.0, 18.0), Qt.AlignmentFlag.AlignLeft, lines[1])
+            painter.drawText(QRectF(tx + 10.0, ty + 50.0, tip_w - 20.0, 18.0), Qt.AlignmentFlag.AlignLeft, lines[2])
 
         painter.end()
 
+
+# ---------------------------------------------------------------------------
+# DeviceBreakdownWidget
+# ---------------------------------------------------------------------------
 
 class DeviceBreakdownWidget(QWidget):
     """Per-hardware-device horizontal power bars with live W, % share, temperature, and Wh."""
@@ -430,7 +536,7 @@ class DeviceBreakdownWidget(QWidget):
     def update_devices(self, components: list[HardwareComponent], total_watts: float) -> None:
         self._components = sorted(components, key=lambda c: c.watts, reverse=True)
         self._total_watts = max(0.1, total_watts)
-        row_h = 46
+        row_h = 52
         needed = max(160, len(self._components) * row_h + 10)
         if self.minimumHeight() != needed:
             self.setMinimumHeight(needed)
@@ -447,8 +553,10 @@ class DeviceBreakdownWidget(QWidget):
             painter.end()
             return
 
-        row_h = 45.0
-        y = 4.0
+        row_h = 52.0
+        y = 2.0
+        card_margin = 6.0
+        card_radius = 8.0
 
         f_name = QFont()
         f_name.setPointSize(9)
@@ -461,10 +569,18 @@ class DeviceBreakdownWidget(QWidget):
             col_hex = CATEGORY_COLORS.get(comp.category, CATEGORY_COLORS["other"])
             share = max(0.0, min(1.0, comp.watts / self._total_watts))
 
+            # Card-style row background
+            card_rect = QRectF(card_margin, y, w - 2.0 * card_margin, row_h - 4.0)
+            card_bg = QColor(_palette_bg_elevated(self.palette))
+            card_bg.setAlpha(80 if self.palette.is_dark else 60)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(card_bg)
+            painter.drawRoundedRect(card_rect, card_radius, card_radius)
+
             # Color dot
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(col_hex))
-            painter.drawEllipse(QPointF(10.0, y + 10.0), 4.5, 4.5)
+            painter.drawEllipse(QPointF(card_margin + 14.0, y + 12.0), 4.5, 4.5)
 
             # Device name + subtle metadata
             meta_bits: list[str] = []
@@ -478,51 +594,64 @@ class DeviceBreakdownWidget(QWidget):
                 meta_bits.append(comp.extra_info)
             meta_str = "  •  ".join(meta_bits)
 
+            text_x = card_margin + 26.0
             painter.setFont(f_name)
             painter.setPen(QColor(self.palette.text_primary))
             name_text = comp.name
             if meta_str:
                 name_text = f"{comp.name}   "
-            painter.drawText(QRectF(22.0, y + 1.0, w * 0.62, 18.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name_text)
+            painter.drawText(QRectF(text_x, y + 2.0, w * 0.60, 18.0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name_text)
 
             # Right side live W + % + session Wh
             right_str = f"{comp.watts:.2f} W  ({share * 100.0:.0f}%)   •   {format_energy(comp.energy_wh)}"
             painter.setFont(f_name)
             painter.setPen(QColor(self.palette.text_primary))
             painter.drawText(
-                QRectF(w - 250.0, y + 1.0, 242.0, 18.0),
+                QRectF(w - 258.0, y + 2.0, 248.0, 18.0),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
                 right_str,
             )
 
-            # Metadata subtitle right next to bar or above bar
+            # Metadata subtitle
             if meta_str:
                 painter.setFont(f_meta)
                 painter.setPen(QColor(self.palette.text_muted))
                 painter.drawText(
-                    QRectF(22.0, y + 17.0, w - 280.0, 14.0),
+                    QRectF(text_x, y + 19.0, w - 290.0, 14.0),
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                     meta_str,
                 )
 
-            # Progress bar track
-            bar_y = y + 33.0
-            bar_w = max(60.0, w - 30.0)
-            track_rect = QRectF(22.0, bar_y, bar_w, 6.5)
+            # Progress bar track — taller 8px with rounded ends
+            bar_y = y + 36.0
+            bar_h = 8.0
+            bar_w = max(60.0, w - card_margin * 2.0 - 20.0)
+            bar_x = card_margin + 10.0
+            track_rect = QRectF(bar_x, bar_y, bar_w, bar_h)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(self.palette.border))
-            painter.drawRoundedRect(track_rect, 3.2, 3.2)
+            painter.drawRoundedRect(track_rect, bar_h / 2.0, bar_h / 2.0)
 
             fill_w = max(4.0, bar_w * share) if comp.watts > 0.01 else 0.0
             if fill_w > 0:
-                fill_rect = QRectF(22.0, bar_y, fill_w, 6.5)
-                painter.setBrush(QColor(col_hex))
-                painter.drawRoundedRect(fill_rect, 3.2, 3.2)
+                fill_rect = QRectF(bar_x, bar_y, fill_w, bar_h)
+                # Subtle left-to-right gradient within device color
+                bar_grad = QLinearGradient(QPointF(bar_x, 0), QPointF(bar_x + fill_w, 0))
+                c_start = QColor(col_hex)
+                c_start.setAlpha(200)
+                bar_grad.setColorAt(0.0, c_start)
+                bar_grad.setColorAt(1.0, QColor(col_hex))
+                painter.setBrush(bar_grad)
+                painter.drawRoundedRect(fill_rect, bar_h / 2.0, bar_h / 2.0)
 
             y += row_h
 
         painter.end()
 
+
+# ---------------------------------------------------------------------------
+# HistoryBarChart
+# ---------------------------------------------------------------------------
 
 class HistoryBarChart(QWidget):
     """Interactive historical bar chart for Energy (Wh), Electricity Cost ($), or Carbon (g CO2e)."""
@@ -596,10 +725,13 @@ class HistoryBarChart(QWidget):
         max_v = max(vals, default=0.0)
         y_max = max_v * 1.2 if max_v > 0 else 1.0
 
+        # Grid lines — thinner
         f_axis = QFont()
         f_axis.setPointSize(8)
         painter.setFont(f_axis)
-        grid_pen = QPen(QColor(self.palette.grid_line), 1.0, Qt.PenStyle.DashLine)
+        grid_c = QColor(self.palette.grid_line)
+        grid_c.setAlpha(140 if self.palette.is_dark else 180)
+        grid_pen = QPen(grid_c, 0.5, Qt.PenStyle.SolidLine)
         for i in range(5):
             frac = i / 4.0
             y = plot.bottom() - frac * plot.height()
@@ -624,25 +756,48 @@ class HistoryBarChart(QWidget):
         }
         bar_hex = color_map.get(self.chart_metric, self.palette.accent_emerald)
 
-        n = len(self.buckets)
-        slot_w = plot.width() / max(1, n)
+        nb = len(self.buckets)
+        slot_w = plot.width() / max(1, nb)
         bar_w = max(4.0, min(28.0, slot_w * 0.66))
-        label_stride = max(1, math.ceil(n / 8))
+        label_stride = max(1, math.ceil(nb / 8))
+        top_radius = max(2.0, bar_w * 0.22)
 
         for i, b in enumerate(self.buckets):
             cx = plot.left() + (i + 0.5) * slot_w
             v = vals[i]
             bh = (v / y_max) * plot.height() if max_v > 0 else 0.0
             if bh > 0.5:
-                brect = QRectF(cx - bar_w / 2.0, plot.bottom() - bh, bar_w, bh)
+                bar_x = cx - bar_w / 2.0
+                bar_top = plot.bottom() - bh
+
+                # Hover glow — wider semi-transparent bar behind
+                if self._hover_idx is not None and i == self._hover_idx:
+                    glow_c = QColor(bar_hex)
+                    glow_c.setAlpha(40)
+                    glow_w = bar_w + 6.0
+                    glow_rect = QRectF(cx - glow_w / 2.0, bar_top - 2.0, glow_w, bh + 2.0)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(glow_c)
+                    painter.drawRoundedRect(glow_rect, top_radius + 1.0, top_radius + 1.0)
+
+                # Bar with rounded top caps only (via QPainterPath)
+                bar_path = QPainterPath()
+                bar_path.moveTo(bar_x, plot.bottom())
+                bar_path.lineTo(bar_x, bar_top + top_radius)
+                bar_path.quadTo(bar_x, bar_top, bar_x + top_radius, bar_top)
+                bar_path.lineTo(bar_x + bar_w - top_radius, bar_top)
+                bar_path.quadTo(bar_x + bar_w, bar_top, bar_x + bar_w, bar_top + top_radius)
+                bar_path.lineTo(bar_x + bar_w, plot.bottom())
+                bar_path.closeSubpath()
+
                 c = QColor(bar_hex)
                 if self._hover_idx is not None and i != self._hover_idx:
-                    c.setAlpha(155)
+                    c.setAlpha(145)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(c)
-                painter.drawRoundedRect(brect, 4.0, 4.0)
+                painter.drawPath(bar_path)
 
-            if i % label_stride == 0 or i == n - 1:
+            if i % label_stride == 0 or i == nb - 1:
                 painter.setPen(QColor(self.palette.text_muted))
                 painter.drawText(
                     QRectF(cx - 28.0, plot.bottom() + 5.0, 56.0, 18.0),
@@ -650,19 +805,15 @@ class HistoryBarChart(QWidget):
                     b.bucket_label,
                 )
 
-        if self._hover_idx is not None and 0 <= self._hover_idx < n:
+        # Frosted tooltip (matching LivePowerChart style)
+        if self._hover_idx is not None and 0 <= self._hover_idx < nb:
             b = self.buckets[self._hover_idx]
             cx = plot.left() + (self._hover_idx + 0.5) * slot_w
-            tip_w, tip_h = 182.0, 74.0
+            tip_w, tip_h = 190.0, 78.0
             tx = cx + 10.0 if (cx + 10.0 + tip_w <= plot.right()) else (cx - tip_w - 10.0)
             ty = plot.top() + 6.0
             trect = QRectF(tx, ty, tip_w, tip_h)
-
-            bg = QColor(self.palette.bg_sidebar)
-            bg.setAlpha(240)
-            painter.setPen(QPen(QColor(self.palette.border_strong), 1.0))
-            painter.setBrush(bg)
-            painter.drawRoundedRect(trect, 8.0, 8.0)
+            _draw_frosted_tooltip(painter, trect, self.palette, 10.0)
 
             c_str = format_currency(energy_cost(b.energy_wh, self.profile), self.profile.currency_symbol)
             co2_str = format_carbon(energy_carbon_grams(b.energy_wh, self.profile))
@@ -673,7 +824,7 @@ class HistoryBarChart(QWidget):
             painter.setFont(f_tip)
             painter.setPen(QColor(self.palette.text_primary))
             painter.drawText(
-                QRectF(tx + 9.0, ty + 6.0, tip_w - 18.0, 18.0),
+                QRectF(tx + 10.0, ty + 8.0, tip_w - 20.0, 18.0),
                 Qt.AlignmentFlag.AlignLeft,
                 f"{b.bucket_label}  •  Avg {b.avg_watts:.1f}W",
             )
@@ -681,12 +832,12 @@ class HistoryBarChart(QWidget):
             painter.setFont(f_tip)
             painter.setPen(QColor(self.palette.text_secondary))
             painter.drawText(
-                QRectF(tx + 9.0, ty + 27.0, tip_w - 18.0, 18.0),
+                QRectF(tx + 10.0, ty + 29.0, tip_w - 20.0, 18.0),
                 Qt.AlignmentFlag.AlignLeft,
                 f"Energy: {format_energy(b.energy_wh)}  ({c_str})",
             )
             painter.drawText(
-                QRectF(tx + 9.0, ty + 46.0, tip_w - 18.0, 18.0),
+                QRectF(tx + 10.0, ty + 50.0, tip_w - 20.0, 18.0),
                 Qt.AlignmentFlag.AlignLeft,
                 f"Footprint: {co2_str}",
             )

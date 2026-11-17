@@ -146,8 +146,8 @@ class WattWiseMainWindow(QMainWindow):
         self.app_icon = create_app_icon(128)
         self.setWindowTitle(f"{__app_name__} — Power, Cost & Carbon Tracker")
         self.setWindowIcon(self.app_icon)
-        self.resize(1220, 800)
-        self.setMinimumSize(980, 660)
+        self.resize(1280, 840)
+        self.setMinimumSize(1020, 700)
 
         self._build_ui()
         self._setup_tray()
@@ -174,24 +174,24 @@ class WattWiseMainWindow(QMainWindow):
         # Left Navigation Sidebar
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(236)
+        sidebar.setFixedWidth(250)
         side_v = QVBoxLayout(sidebar)
-        side_v.setContentsMargins(16, 20, 16, 16)
+        side_v.setContentsMargins(20, 24, 20, 20)
         side_v.setSpacing(8)
 
         brand_row = QHBoxLayout()
         brand_badge = QLabel("⚡")
         brand_badge.setStyleSheet(
-            "font-size: 20px; background-color: #059669; color: white; "
-            "border-radius: 8px; padding: 4px 8px;"
+            f"font-size: 18px; background-color: {self.palette_theme.accent_primary}; color: white; "
+            "border-radius: 10px; padding: 6px 10px;"
         )
-        brand_badge.setFixedSize(36, 36)
+        brand_badge.setFixedSize(40, 40)
         brand_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         brand_txt_v = QVBoxLayout()
         brand_txt_v.setSpacing(1)
         title_lbl = QLabel(__app_name__)
-        title_lbl.setStyleSheet("font-size: 18px; font-weight: 800;")
+        title_lbl.setStyleSheet("font-size: 19px; font-weight: 800;")
         self.os_badge_lbl = QLabel(self.engine.collector.host_platform_banner())
         self.os_badge_lbl.setObjectName("MutedLabel")
         self.os_badge_lbl.setStyleSheet("font-size: 11px;")
@@ -199,25 +199,28 @@ class WattWiseMainWindow(QMainWindow):
         brand_txt_v.addWidget(self.os_badge_lbl)
 
         brand_row.addWidget(brand_badge)
-        brand_row.addSpacing(8)
+        brand_row.addSpacing(10)
         brand_row.addLayout(brand_txt_v)
         brand_row.addStretch()
         side_v.addLayout(brand_row)
-        side_v.addSpacing(14)
+        side_v.addSpacing(20)
 
         self.nav_buttons: list[QPushButton] = []
         nav_specs = [
-            ("⚡  Live Dashboard", 0),
-            ("🖥️  By Device && App", 1),
-            ("🌱  Cost && Carbon", 2),
-            ("⚙️  Platform && Export", 3),
+            ("Dashboard", 0),
+            ("Devices && Apps", 1),
+            ("Cost && Carbon", 2),
+            ("Settings && Export", 3),
         ]
         for label, idx in nav_specs:
             btn = QPushButton(label)
             btn.setObjectName("NavButton")
+            btn.setFixedHeight(44)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _checked=False, i=idx: self.switch_page(i))
             side_v.addWidget(btn)
+            if idx < len(nav_specs) - 1:
+                side_v.addSpacing(12)
             self.nav_buttons.append(btn)
 
         side_v.addStretch()
@@ -226,8 +229,8 @@ class WattWiseMainWindow(QMainWindow):
         status_card = QFrame()
         status_card.setObjectName("SubCard")
         sc_v = QVBoxLayout(status_card)
-        sc_v.setContentsMargins(12, 10, 12, 10)
-        sc_v.setSpacing(6)
+        sc_v.setContentsMargins(14, 12, 14, 12)
+        sc_v.setSpacing(8)
 
         self.sidebar_live_lbl = QLabel("● Sampling Live")
         self.sidebar_live_lbl.setStyleSheet("font-weight: 700; font-size: 12px; color: #10B981;")
@@ -237,7 +240,7 @@ class WattWiseMainWindow(QMainWindow):
         sc_v.addWidget(self.sidebar_session_lbl)
 
         ctrl_row = QHBoxLayout()
-        ctrl_row.setSpacing(6)
+        ctrl_row.setSpacing(8)
         self.pause_btn = QPushButton("Pause")
         self.pause_btn.setObjectName("ActionButton")
         self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -279,8 +282,8 @@ class WattWiseMainWindow(QMainWindow):
     def _build_dashboard_page(self) -> QWidget:
         page = QWidget()
         v = QVBoxLayout(page)
-        v.setContentsMargins(22, 20, 22, 20)
-        v.setSpacing(16)
+        v.setContentsMargins(28, 24, 28, 24)
+        v.setSpacing(18)
 
         # Header
         hdr = QHBoxLayout()
@@ -304,7 +307,7 @@ class WattWiseMainWindow(QMainWindow):
 
         # 4 Top KPI Cards
         kpi_row = QHBoxLayout()
-        kpi_row.setSpacing(12)
+        kpi_row.setSpacing(14)
         self.kpi_power = KpiCard("LIVE SYSTEM DRAW", "#10B981")
         self.kpi_energy = KpiCard("TODAY'S ENERGY", "#06B6D4")
         self.kpi_cost = KpiCard("ELECTRICITY COST", "#8B5CF6")
@@ -315,14 +318,14 @@ class WattWiseMainWindow(QMainWindow):
 
         # Middle row: Gauge + Battery card on left | Live Chart on right
         mid_row = QHBoxLayout()
-        mid_row.setSpacing(14)
+        mid_row.setSpacing(18)
 
         left_card = QFrame()
         left_card.setObjectName("Card")
-        left_card.setFixedWidth(315)
+        left_card.setFixedWidth(330)
         lc_v = QVBoxLayout(left_card)
-        lc_v.setContentsMargins(14, 14, 14, 14)
-        lc_v.setSpacing(8)
+        lc_v.setContentsMargins(16, 16, 16, 16)
+        lc_v.setSpacing(10)
 
         g_title = QLabel("Instantaneous Load")
         g_title.setObjectName("SectionTitle")
@@ -334,8 +337,8 @@ class WattWiseMainWindow(QMainWindow):
         bat_box = QFrame()
         bat_box.setObjectName("SubCard")
         bb_v = QVBoxLayout(bat_box)
-        bb_v.setContentsMargins(12, 9, 12, 9)
-        bb_v.setSpacing(3)
+        bb_v.setContentsMargins(14, 10, 14, 10)
+        bb_v.setSpacing(4)
         self.bat_title_lbl = QLabel("Power Source: Detecting…")
         self.bat_title_lbl.setStyleSheet("font-weight: 700; font-size: 12px;")
         self.bat_detail_lbl = QLabel("—")
@@ -350,8 +353,8 @@ class WattWiseMainWindow(QMainWindow):
         chart_card = QFrame()
         chart_card.setObjectName("Card")
         cc_v = QVBoxLayout(chart_card)
-        cc_v.setContentsMargins(16, 14, 16, 14)
-        cc_v.setSpacing(6)
+        cc_v.setContentsMargins(18, 16, 18, 16)
+        cc_v.setSpacing(8)
 
         ch_top = QHBoxLayout()
         ch_lbl = QLabel("Live Power Timeline (Total vs CPU vs GPU)")
@@ -373,8 +376,8 @@ class WattWiseMainWindow(QMainWindow):
         dev_card = QFrame()
         dev_card.setObjectName("Card")
         dc_v = QVBoxLayout(dev_card)
-        dc_v.setContentsMargins(16, 14, 16, 14)
-        dc_v.setSpacing(8)
+        dc_v.setContentsMargins(18, 16, 18, 16)
+        dc_v.setSpacing(10)
 
         dh_row = QHBoxLayout()
         dh_title = QLabel("Power Consumption by Hardware Device")
@@ -401,8 +404,8 @@ class WattWiseMainWindow(QMainWindow):
     def _build_devices_apps_page(self) -> QWidget:
         page = QWidget()
         v = QVBoxLayout(page)
-        v.setContentsMargins(22, 20, 22, 20)
-        v.setSpacing(16)
+        v.setContentsMargins(28, 24, 28, 24)
+        v.setSpacing(18)
 
         t = QLabel("Hardware Devices & Applications")
         t.setObjectName("PageTitle")
@@ -417,8 +420,8 @@ class WattWiseMainWindow(QMainWindow):
         hw_card = QFrame()
         hw_card.setObjectName("Card")
         hw_v = QVBoxLayout(hw_card)
-        hw_v.setContentsMargins(16, 14, 16, 14)
-        hw_v.setSpacing(10)
+        hw_v.setContentsMargins(18, 16, 18, 16)
+        hw_v.setSpacing(12)
 
         hw_lbl = QLabel("Hardware Subsystems")
         hw_lbl.setObjectName("SectionTitle")
@@ -441,7 +444,7 @@ class WattWiseMainWindow(QMainWindow):
         self.hw_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.hw_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.hw_table.setAlternatingRowColors(True)
-        self.hw_table.setMinimumHeight(225)
+        self.hw_table.setMinimumHeight(250)
         hh = self.hw_table.horizontalHeader()
         hh.setMinimumSectionSize(52)
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -454,15 +457,15 @@ class WattWiseMainWindow(QMainWindow):
         app_card = QFrame()
         app_card.setObjectName("Card")
         ap_v = QVBoxLayout(app_card)
-        ap_v.setContentsMargins(16, 14, 16, 14)
-        ap_v.setSpacing(10)
+        ap_v.setContentsMargins(18, 16, 18, 16)
+        ap_v.setSpacing(12)
 
         ap_hdr = QHBoxLayout()
         ap_lbl = QLabel("Active Applications & Processes Attribution")
         ap_lbl.setObjectName("SectionTitle")
         self.app_search_edit = QLineEdit()
-        self.app_search_edit.setPlaceholderText("Filter applications by name…")
-        self.app_search_edit.setFixedWidth(250)
+        self.app_search_edit.setPlaceholderText("🔍 Filter applications by name…")
+        self.app_search_edit.setFixedWidth(280)
         self.app_search_edit.textChanged.connect(self._refresh_apps_table)
         ap_hdr.addWidget(ap_lbl)
         ap_hdr.addStretch()
@@ -486,7 +489,7 @@ class WattWiseMainWindow(QMainWindow):
         self.app_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.app_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.app_table.setAlternatingRowColors(True)
-        self.app_table.setMinimumHeight(260)
+        self.app_table.setMinimumHeight(300)
         ah = self.app_table.horizontalHeader()
         ah.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 8):
@@ -503,8 +506,8 @@ class WattWiseMainWindow(QMainWindow):
     def _build_cost_carbon_page(self) -> QWidget:
         page = QWidget()
         v = QVBoxLayout(page)
-        v.setContentsMargins(22, 20, 22, 20)
-        v.setSpacing(16)
+        v.setContentsMargins(28, 24, 28, 24)
+        v.setSpacing(18)
 
         t = QLabel("Electricity Cost & Carbon Footprint (CO₂e)")
         t.setObjectName("PageTitle")
@@ -519,9 +522,9 @@ class WattWiseMainWindow(QMainWindow):
         cfg_card = QFrame()
         cfg_card.setObjectName("Card")
         cfg_grid = QGridLayout(cfg_card)
-        cfg_grid.setContentsMargins(16, 14, 16, 14)
-        cfg_grid.setHorizontalSpacing(14)
-        cfg_grid.setVerticalSpacing(8)
+        cfg_grid.setContentsMargins(18, 16, 18, 16)
+        cfg_grid.setHorizontalSpacing(16)
+        cfg_grid.setVerticalSpacing(10)
 
         cfg_grid.addWidget(QLabel("Regional Grid Preset"), 0, 0)
         cfg_grid.addWidget(QLabel("Currency"), 0, 1)
@@ -569,7 +572,7 @@ class WattWiseMainWindow(QMainWindow):
 
         # 4 Financial & Carbon Projection Cards
         proj_row = QHBoxLayout()
-        proj_row.setSpacing(12)
+        proj_row.setSpacing(14)
         self.proj_hourly = KpiCard("LIVE BURN RATE", "#10B981")
         self.proj_daily = KpiCard("PROJECTED DAILY", "#06B6D4")
         self.proj_monthly = KpiCard("PROJECTED MONTHLY BILL", "#8B5CF6")
@@ -582,15 +585,15 @@ class WattWiseMainWindow(QMainWindow):
         eq_card = QFrame()
         eq_card.setObjectName("Card")
         eq_v = QVBoxLayout(eq_card)
-        eq_v.setContentsMargins(16, 14, 16, 14)
-        eq_v.setSpacing(10)
+        eq_v.setContentsMargins(18, 16, 18, 16)
+        eq_v.setSpacing(12)
 
         eq_title = QLabel("Monthly Environmental Impact Equivalents (at Current Load & Schedule)")
         eq_title.setObjectName("SectionTitle")
         eq_v.addWidget(eq_title)
 
         eq_row = QHBoxLayout()
-        eq_row.setSpacing(12)
+        eq_row.setSpacing(14)
         self.eq_phones = KpiCard("📱 SMARTPHONE CHARGES", "#06B6D4")
         self.eq_car = KpiCard("🚗 PASSENGER CAR DRIVEN", "#F59E0B")
         self.eq_trees = KpiCard("🌳 TREE ABSORPTION EFFORT", "#10B981")
@@ -604,8 +607,8 @@ class WattWiseMainWindow(QMainWindow):
         hist_card = QFrame()
         hist_card.setObjectName("Card")
         hv = QVBoxLayout(hist_card)
-        hv.setContentsMargins(16, 14, 16, 14)
-        hv.setSpacing(10)
+        hv.setContentsMargins(18, 16, 18, 16)
+        hv.setSpacing(12)
 
         h_bar = QHBoxLayout()
         h_title = QLabel("Historical Consumption, Cost & CO₂e")
@@ -620,6 +623,7 @@ class WattWiseMainWindow(QMainWindow):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(lambda _c=False, k=key: self._set_history_period(k))
             h_bar.addWidget(b)
+            h_bar.addSpacing(4)
             self.period_btns[key] = b
 
         h_bar.addSpacing(12)
@@ -631,6 +635,7 @@ class WattWiseMainWindow(QMainWindow):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.clicked.connect(lambda _c=False, k=key: self._set_history_metric(k))
             h_bar.addWidget(b)
+            h_bar.addSpacing(4)
             self.metric_btns[key] = b
 
         hv.addLayout(h_bar)
@@ -650,8 +655,8 @@ class WattWiseMainWindow(QMainWindow):
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
         v = QVBoxLayout(page)
-        v.setContentsMargins(22, 20, 22, 20)
-        v.setSpacing(16)
+        v.setContentsMargins(28, 24, 28, 24)
+        v.setSpacing(18)
 
         t = QLabel("Platform Diagnostics, Preferences & Export")
         t.setObjectName("PageTitle")
@@ -664,13 +669,13 @@ class WattWiseMainWindow(QMainWindow):
 
         # Preferences & Export Row
         top_row = QHBoxLayout()
-        top_row.setSpacing(14)
+        top_row.setSpacing(18)
 
         pref_card = QFrame()
         pref_card.setObjectName("Card")
         pv = QVBoxLayout(pref_card)
-        pv.setContentsMargins(16, 14, 16, 14)
-        pv.setSpacing(12)
+        pv.setContentsMargins(18, 16, 18, 16)
+        pv.setSpacing(14)
 
         p_title = QLabel("Application Preferences")
         p_title.setObjectName("SectionTitle")
@@ -717,8 +722,8 @@ class WattWiseMainWindow(QMainWindow):
         exp_card = QFrame()
         exp_card.setObjectName("Card")
         ev = QVBoxLayout(exp_card)
-        ev.setContentsMargins(16, 14, 16, 14)
-        ev.setSpacing(12)
+        ev.setContentsMargins(18, 16, 18, 16)
+        ev.setSpacing(14)
 
         e_title = QLabel("Export Telemetry & Cost Reports")
         e_title.setObjectName("SectionTitle")
@@ -756,8 +761,8 @@ class WattWiseMainWindow(QMainWindow):
         diag_card = QFrame()
         diag_card.setObjectName("Card")
         dv = QVBoxLayout(diag_card)
-        dv.setContentsMargins(16, 14, 16, 14)
-        dv.setSpacing(8)
+        dv.setContentsMargins(18, 16, 18, 16)
+        dv.setSpacing(10)
 
         d_title = QLabel("Cross-Platform Hardware Sensor Diagnostics")
         d_title.setObjectName("SectionTitle")
@@ -766,6 +771,7 @@ class WattWiseMainWindow(QMainWindow):
         self.diag_info_lbl = QLabel("Collecting sensor diagnostics…")
         self.diag_info_lbl.setWordWrap(True)
         self.diag_info_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.diag_info_lbl.setStyleSheet("font-size: 13px; line-height: 1.5;")
         dv.addWidget(self.diag_info_lbl)
 
         tips = QLabel(
